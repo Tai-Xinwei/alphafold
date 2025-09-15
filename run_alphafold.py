@@ -23,7 +23,7 @@ import shutil
 import sys
 import time
 from typing import Any, Dict, Union
-
+import glob
 from absl import app
 from absl import flags
 from absl import logging
@@ -41,7 +41,7 @@ from alphafold.model import model
 from alphafold.relax import relax
 import jax.numpy as jnp
 import numpy as np
-
+import jax
 # Internal import (7716).
 
 logging.set_verbosity(logging.INFO)
@@ -423,6 +423,9 @@ def predict_structure(
 
 
 def main(argv):
+  # print("All available devices:")
+  # for i, d in enumerate(jax.devices()):
+  #     print(f"  {i}: {d}")
   if len(argv) > 1:
     raise app.UsageError('Too many command-line arguments.')
 
@@ -453,6 +456,19 @@ def main(argv):
     num_ensemble = 8
   else:
     num_ensemble = 1
+
+  # 展开 fasta_paths：支持传入目录
+  expanded_fasta_paths = []
+  for p in FLAGS.fasta_paths:
+      path = pathlib.Path(p)
+      if path.is_dir():
+          # 找出目录下所有 .fasta 文件
+          fastas = sorted(glob.glob(str(path / "*.fasta")))
+          expanded_fasta_paths.extend(fastas)
+      else:
+          expanded_fasta_paths.append(str(path))
+
+  FLAGS.fasta_paths = expanded_fasta_paths
 
   # Check for duplicate FASTA file names.
   fasta_names = [pathlib.Path(p).stem for p in FLAGS.fasta_paths]

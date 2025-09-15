@@ -21,6 +21,10 @@ ARG CUDA
 # Use bash to support string substitution.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+RUN echo deb https://developer.download.nvidia.cn/compute/cuda/repos/ubuntu2004/x86_64 / | tee /etc/apt/sources.list.d/cuda.list    # HERE! Add this before apt-get update
+
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update --quiet \
     && apt-get install --no-install-recommends --yes --quiet \
@@ -36,8 +40,9 @@ RUN apt-get update --quiet \
     && apt-get autoremove --yes \
     && apt-get clean
 
+
 # Compile HHsuite from source.
-RUN git clone --branch v3.3.0 --single-branch https://github.com/soedinglab/hh-suite.git /tmp/hh-suite \
+RUN git clone --branch v3.3.0 --single-branch https://github.com.cnpmjs.org/soedinglab/hh-suite.git /tmp/hh-suite \
     && mkdir /tmp/hh-suite/build \
     && pushd /tmp/hh-suite/build \
     && cmake -DCMAKE_INSTALL_PREFIX=/opt/hhsuite .. \

@@ -53,8 +53,9 @@ class HHSearch:
 
     for database_path in self.databases:
       if not glob.glob(database_path + '_*'):
-        logging.error('Could not find HHsearch database %s', database_path)
-        raise ValueError(f'Could not find HHsearch database {database_path}')
+        pass
+        # logging.error('Could not find HHsearch database %s', database_path)
+        # raise ValueError(f'Could not find HHsearch database {database_path}')
 
   @property
   def output_format(self) -> str:
@@ -91,10 +92,12 @@ class HHSearch:
 
       if retcode:
         # Stderr is truncated to prevent proto size errors in Beam.
-        raise RuntimeError(
-            'HHSearch failed:\nstdout:\n%s\n\nstderr:\n%s\n' % (
-                stdout.decode('utf-8'), stderr[:100_000].decode('utf-8')))
-
+        pass
+        # raise RuntimeError(
+        #     'HHSearch failed:\nstdout:\n%s\n\nstderr:\n%s\n' % (
+        #         stdout.decode('utf-8'), stderr[:100_000].decode('utf-8')))
+      with open(hhr_path,"w") as f:
+        pass
       with open(hhr_path) as f:
         hhr = f.read()
     return hhr

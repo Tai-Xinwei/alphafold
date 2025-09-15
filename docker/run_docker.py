@@ -38,7 +38,7 @@ flags.DEFINE_enum('models_to_relax', 'best', ['best', 'all', 'none'],
                   'in case you are having issues with the relaxation '
                   'stage.')
 flags.DEFINE_bool(
-    'enable_gpu_relax', True, 'Run relax on GPU if GPU is enabled.')
+    'enable_gpu_relax', False, 'Run relax on GPU if GPU is enabled.')
 flags.DEFINE_string(
     'gpu_devices', 'all',
     'Comma separated list of devices to pass to NVIDIA_VISIBLE_DEVICES.')
@@ -214,6 +214,15 @@ def main(argv):
   output_target_path = os.path.join(_ROOT_MOUNT_DIRECTORY, 'output')
   mounts.append(types.Mount(output_target_path, FLAGS.output_dir, type='bind'))
 
+  alphafold_repo_host = str(pathlib.Path(__file__).parent.parent.resolve())
+  mounts.append(types.Mount(
+        target="/app/alphafold",
+        source=alphafold_repo_host,
+        type="bind",
+        read_only=False  # 需要可写以便你调试
+    ))
+
+
   use_gpu_relax = FLAGS.enable_gpu_relax and FLAGS.use_gpu
 
   command_args.extend([
@@ -228,27 +237,64 @@ def main(argv):
       f'--use_gpu_relax={use_gpu_relax}',
       '--logtostderr',
   ])
+  
+  # --- new code starts here ---
+  
+  cmd_parts = [
+    "docker",
+    "run",
+    "--rm",                                         # equivalent of remove=True
+    "-d",                                           # equivalent of detach=True
+    f"-u {FLAGS.docker_user}",                      # equivalent of user=Flags.docker_user
+    # setting the env vars
+    f"-e NVIDIA_VISIBLE_DEVICES={FLAGS.gpu_devices}",  
+    "-e TF_FORCE_UNIFIED_MEMORY=1",
+    "-e XLA_PYTHON_CLIENT_MEM_FRACTION=4.0",
+    "--gpus all",                                   # to use GPUs in container
+    "--userns=host",  
+  ]
+  # setting the valome bindings
+  for mount in mounts:
+    mnt_str = f"{mount['Source']}:{mount['Target']}"
+    if mount['ReadOnly']:
+      mnt_str += ":ro"
+    cmd_parts.append("-v " + mnt_str)
+  # specify docker image
+  cmd_parts.append(FLAGS.docker_image_name)
+  # specify command args
+  cmd_parts.extend(command_args)
+
+  # Just print the command for debugging purposes (if you can't see it in the output, use logging.info instead of logging.debug)
+#   logging.debug(f"Run command: f{' \\\n  '.join(cmd_parts)}")
+  import subprocess
+  # probably want to do some error handling here (at least print stderr)
+  container_id = container_id = subprocess.getoutput(' '.join(cmd_parts))
 
   client = docker.from_env()
-  device_requests = [
-      docker.types.DeviceRequest(driver='nvidia', capabilities=[['gpu']])
-  ] if FLAGS.use_gpu else None
+  container = client.containers.get(container_id)
 
-  container = client.containers.run(
-      image=FLAGS.docker_image_name,
-      command=command_args,
-      device_requests=device_requests,
-      remove=True,
-      detach=True,
-      mounts=mounts,
-      user=FLAGS.docker_user,
-      environment={
-          'NVIDIA_VISIBLE_DEVICES': FLAGS.gpu_devices,
-          # The following flags allow us to make predictions on proteins that
-          # would typically be too long to fit into GPU memory.
-          'TF_FORCE_UNIFIED_MEMORY': '1',
-          'XLA_PYTHON_CLIENT_MEM_FRACTION': '4.0',
-      })
+  # covered by --gpus all argument
+  # device_requests = [
+  #     docker.types.DeviceRequest(count=-1, capabilities=[['gpu']])
+  # ] if FLAGS.use_gpu else None
+
+  # container = client.containers.run(
+  #     image=FLAGS.docker_image_name,
+  #     command=command_args,
+  #     device_requests=device_requests,
+  #     remove=True,
+  #     detach=True,
+  #     mounts=mounts,
+  #     user=FLAGS.docker_user,
+  #     environment={
+  #         'NVIDIA_VISIBLE_DEVICES': FLAGS.gpu_devices,
+  #         # The following flags allow us to make predictions on proteins that
+  #         # would typically be too long to fit into GPU memory.
+  #         'TF_FORCE_UNIFIED_MEMORY': '1',
+  #         'XLA_PYTHON_CLIENT_MEM_FRACTION': '4.0',
+  #     })
+
+  # --- new code ends here ---
 
   # Add signal handler to ensure CTRL+C also stops the running container.
   signal.signal(signal.SIGINT,
